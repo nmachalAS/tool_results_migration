@@ -1,0 +1,63 @@
+[
+    {
+        "full_name":"User does not exist",
+        "type":"User does not exist",
+        "identify":"users",
+        "type_exit_file":"txt",
+        "message_exit_file":"users doesn't exist",
+        "head_file":"List of users id with error message : User does not exist"
+    },
+    {
+        "full_name":"Schema validation error\n[Error] Element length must be lower or equal to 50!",
+        "type":"Schema validation error\n[Error] Element length must be lower or equal to 50!",
+        "identify":"users",
+        "type_exit_file":"txt",
+        "message_exit_file":"users with element length>50",
+        "head_file":"List of users id with error message : Schema validation error\n[Error] Element length must be lower or equal to 50!"
+    },
+    {
+        "full_name":"[NEW USER]",
+        "type":"[NEW USER]",
+        "identify":"users",
+        "type_exit_file":"txt",
+        "message_exit_file":"new users",
+        "head_file":"List of users id with error message : [NEW USER]"
+    },
+    {
+        "full_name":"[REMOVED USER]",
+        "type":"[REMOVED USER]",
+        "identify":"users",
+        "type_exit_file":"txt",
+        "message_exit_file":"removed users",
+        "head_file":"List of users id with error message : [REMOVED USER]"
+    },
+    {
+        "full_name":"[NEW ORGANIZATION]",
+        "type":"[NEW ORGANIZATION]",
+        "identify":"users",
+        "type_exit_file":"txt",
+        "message_exit_file":"users have a new thirdparty organization",
+        "head_file":"List of users id with error message : New ThirdParty Organization"
+    },
+    {
+        "full_name":"[REMOVED ORGANIZATION]",
+        "type":"[REMOVED ORGANIZATION]",
+        "identify":"users",
+        "type_exit_file":"txt",
+        "message_exit_file":"users have a removed thirdparty organization",
+        "head_file":"List of users id with error message : Removed ThirdParty Organization"
+    },
+    {
+        "full_name":"[REMOVED ORGANIZATION]",
+        "type":"[REMOVED ORGANIZATION]",
+        "identify":"users",
+        "type_exit_file":"txt",
+        "message_exit_file":"users have a removed thirdparty organization",
+        "head_file":"List of users id with error message : Removed ThirdParty Organization"
+    },
+    
+
+
+
+
+]

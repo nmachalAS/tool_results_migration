@@ -2,6 +2,7 @@ import os
 import json
 import sys
 from collections import OrderedDict
+from operator import itemgetter
 """
 Check the results from immigration from allure-results.json files. 
 Take as input the repository that contains all allure-results folders.
@@ -51,9 +52,12 @@ def treatRolesDifferent(message,user_id,roles_differents,dict_context_roles_user
         admin_roles.append(user_id)
         list_added=[]
         list_removed=[]
+        list_duplicate=[]
         context=context_changed.split("in ")[1].split(" New")[0]
         if context not in dict_context_roles_users.keys():
             dict_context_roles_users[context]={}
+            dict_context_roles_users[context]["differences"]=OrderedDict()
+            dict_context_roles_users[context]["total_change_for_context"]=0
 
         new_old=context_changed.split("Old",1)
 
@@ -77,14 +81,18 @@ def treatRolesDifferent(message,user_id,roles_differents,dict_context_roles_user
         for old in list_old:
             if old not in list_new:
                 list_removed.append(old)
-        difference={}
-        difference="added : " + str(list_added)+ " ; removed : "+str(list_removed)
-        if difference not in dict_context_roles_users[context].keys():
-            dict_context_roles_users[context][difference]={}
-            dict_context_roles_users[context][difference]["number of users with this context with this difference : "]=1
-        else:
-            dict_context_roles_users[context][difference]["number of users with this context with this difference : "]+=1
-
+            if list_new.count(old)>1:
+                list_duplicate.append(old)
+        difference="+ : " + str(list_added)+ " ; - : "+str(list_removed)+" ; duplicate : "+str(list_duplicate)
+            
+        if difference not in dict_context_roles_users[context]["differences"].keys():
+            dict_context_roles_users[context]["differences"][difference]=OrderedDict()
+            dict_context_roles_users[context]["differences"][difference]["number of users with this context with this difference"]=0
+            dict_context_roles_users[context]["differences"][difference]["user"]=[]
+            
+        dict_context_roles_users[context]["differences"][difference]["number of users with this context with this difference"]+=1
+        dict_context_roles_users[context]["differences"][difference]["user"].append(user_id)
+        dict_context_roles_users[context]["total_change_for_context"]+=1
     return roles_differents,dict_context_roles_users,admin_roles
 
 def treatOrgaContextChanged(orga_context_added,orga_context_removed,message,user_id):
@@ -95,15 +103,18 @@ def treatOrgaContextChanged(orga_context_added,orga_context_removed,message,user
         context=context_changed.split("[")[1].split("]",1)[0]
         if action=="added":
             if context not in orga_context_added.keys():
-                orga_context_added[context]=1
-            else:
-                orga_context_added[context]+=1
+                orga_context_added[context]={}
+                orga_context_added[context]["nb users"]=0
+                orga_context_added[context]["users"]=[]
+            orga_context_added[context]["nb users"]+=1
+            orga_context_added[context]["users"].append(user_id)
         if action=="removed":
             if context not in orga_context_removed.keys():
-                orga_context_removed[context]=1
-            else:
-                orga_context_removed[context]+=1
-
+                orga_context_removed[context]={}
+                orga_context_removed[context]["nb users"]=0
+                orga_context_removed[context]["users"]=[]
+            orga_context_removed[context]["nb users"]+=1
+            orga_context_removed[context]["users"].append(user_id)
         
     return orga_context_added, orga_context_removed
 
@@ -115,6 +126,11 @@ def getIdFromJson(data):
         id=name.split("[",1)[1].split("]",1)[0]
     elif 'UserMigration_test' in name:
         id=data["steps"][0]["name"].split("[",1)[1].split(",",1)[0]
+        if len(id)>10:
+            try:
+                id=data["steps"][0]["name"].split("[",1)[1].split(",",1)[1][1:-1]
+            except:
+                id=data["steps"][0]["name"].split("[",1)[1].split(",",1)[0][:-1]
     elif 'ThirdPartyOrg_test' in name:
         id=data["steps"][0]["name"].split(": ",1)[1]
     else:
@@ -138,6 +154,38 @@ def isKnownError(message):
     else:
         return False
 
+
+def treatUserNotMigratedCorrectly(message,dict_context_missing,total_of_failures_missing_context,other_errors,user_id):
+    if "Context" in message and "not exists" in message:
+        list_contexts=message.split("Context")[1:]
+        for context in list_contexts:
+            context = context.split("'")[1]
+            if context not in dict_context_missing.keys():
+                dict_context_missing[context]=OrderedDict()
+                dict_context_missing[context]["total_users"]=0
+                dict_context_missing[context]["user"]=[]
+            dict_context_missing[context]["user"].append(user_id)
+            dict_context_missing[context]["total_users"]+=1
+            total_of_failures_missing_context+=1
+    else:
+        other_errors[user_id]=message
+    
+    return dict_context_missing,total_of_failures_missing_context,other_errors
+
+def treatUserDifferences(message,orga_context_added,orga_context_removed,user_id,other_errors,user_data_changed,roles_differents,dict_context_roles_users,admin_roles):
+    if IsKnownUserDiffError(message):
+        if "Organizational Context added" in message or "Organizational Context removed" in message:
+            orga_context_added,orga_context_removed=treatOrgaContextChanged(orga_context_added,orga_context_removed,message,user_id)
+        if ("Communication Channel" in message or "First Name is incorrect" in message or "Last Name is incorrect" in message):
+            user_data_changed.append(user_id)
+        if "Roles are different" in message:
+            roles_differents,dict_context_roles_users,admin_roles=treatRolesDifferent(message,user_id,roles_differents,dict_context_roles_users,admin_roles)
+    else:
+        other_errors[user_id]=message
+    
+    return orga_context_added,orga_context_removed,user_data_changed,roles_differents,dict_context_roles_users,admin_roles
+
+
 def treat_json_file_results(json_file,dictMapErrors,total_of_failures_missing_context,countfailed):
     dict_context_missing=dictMapErrors["dict_context_missing"]
     missing_users=dictMapErrors["missing_users"]
@@ -145,7 +193,7 @@ def treat_json_file_results(json_file,dictMapErrors,total_of_failures_missing_co
     other_errors=dictMapErrors["other_errors"]
     new_users=dictMapErrors["new_users"]
     removed_users=dictMapErrors["removed_users"]
-    orga_context_added=dictMapErrors["organ_context_added"]
+    orga_context_added=dictMapErrors["orga_context_added"]
     orga_context_removed=dictMapErrors["orga_context_removed"]
     new_thirdParty_organ=dictMapErrors["new_thirdParty_organ"]
     removed_thirdParty_orga=dictMapErrors["removed_thirdParty_orga"]
@@ -168,25 +216,10 @@ def treat_json_file_results(json_file,dictMapErrors,total_of_failures_missing_co
                     missing_users.append(user_id)
                 if message=="Schema validation error\n[Error] Element length must be lower or equal to 50!":
                     length_name_bigger_fifty.append(user_id)
-                elif "[USER DIFFERENCES]" in message:
-                    if IsKnownUserDiffError(message):
-                        if "Organizational Context added" in message or "Organizational Context removed" in message:
-                            orga_context_added,orga_context_removed=treatOrgaContextChanged(orga_context_added,orga_context_removed,message,user_id)
-                        if ("Communication Channel" in message or "First Name is incorrect" in message or "Last Name is incorrect" in message):
-                            user_data_changed.append(user_id)
-                        if "Roles are different" in message:
-                            roles_differents,dict_context_roles_users,admin_roles=treatRolesDifferent(message,user_id,roles_differents,dict_context_roles_users,admin_roles)
-                    else:
-                        other_errors[user_id]=message
-                elif "Context" in message:
-                    if "not exists" in message:
-                        context = message.split("'",2)[1]
-                        if context not in dict_context_missing.keys():
-                            dict_context_missing[context]=[]
-                        dict_context_missing[context].append(user_id)
-                        total_of_failures_missing_context+=1
-                    else:
-                        other_errors[user_id]=message
+                if "[USER DIFFERENCES]" in message:
+                    orga_context_added,orga_context_removed,user_data_changed,roles_differents,dict_context_roles_users,admin_roles=treatUserDifferences(message,orga_context_added,orga_context_removed,user_id,other_errors,user_data_changed,roles_differents,dict_context_roles_users,admin_roles)
+                if "User not migrated correctly" in message:
+                    dict_context_missing,total_of_failures_missing_context,other_errors=treatUserNotMigratedCorrectly(message,dict_context_missing,total_of_failures_missing_context,other_errors,user_id)
                 elif message=="[NEW USER]":
                     new_users.append(user_id)
                 elif message=="[REMOVED USER]":
@@ -206,7 +239,7 @@ def treat_json_file_results(json_file,dictMapErrors,total_of_failures_missing_co
     dictMapErrors["other_errors"]=other_errors
     dictMapErrors["new_users"]=new_users
     dictMapErrors["removed_users"]=removed_users
-    dictMapErrors["organ_context_added"]=orga_context_added
+    dictMapErrors["orga_context_added"]=orga_context_added
     dictMapErrors["orga_context_removed"]=orga_context_removed
     dictMapErrors["new_thirdParty_organ"]=new_thirdParty_organ
     dictMapErrors["removed_thirdParty_orga"]=removed_thirdParty_orga
@@ -223,7 +256,7 @@ def countandCreateErrorsMessages(dictMapErrors,total_of_failures_missing_context
     other_errors=dictMapErrors["other_errors"]
     new_users=dictMapErrors["new_users"]
     removed_users=dictMapErrors["removed_users"]
-    organ_context_added=dictMapErrors["organ_context_added"]
+    orga_context_added=dictMapErrors["orga_context_added"]
     orga_context_removed=dictMapErrors["orga_context_removed"]
     new_thirdParty_organ=dictMapErrors["new_thirdParty_organ"]
     removed_thirdParty_orga=dictMapErrors["removed_thirdParty_orga"]
@@ -239,7 +272,7 @@ def countandCreateErrorsMessages(dictMapErrors,total_of_failures_missing_context
     number_errors["length_bigger_errors"]=len(length_name_bigger_fifty)
     number_errors["new_users"]=len(new_users)
     number_errors["removed_users"]=len(removed_users)
-    number_errors["organ_context_added"]=len(organ_context_added)
+    number_errors["orga_context_added"]=len(orga_context_added)
     number_errors["orga_context_removed"]=len(orga_context_removed)
     number_errors["new_thirdParty_organ"]=len(new_thirdParty_organ)
     number_errors["removed_thirdParty_orga"]=len(removed_thirdParty_orga)
@@ -265,7 +298,7 @@ def countandCreateErrorsMessages(dictMapErrors,total_of_failures_missing_context
     error_messages.append(str(number_errors["length_bigger_errors"])+" errors of elements length bigger than 50")
     error_messages.append(str(number_errors["new_users"])+" new users")
     error_messages.append(str(number_errors["removed_users"])+" removed users")
-    error_messages.append(str(number_errors["organ_context_added"])+" unique organanizational context added")
+    error_messages.append(str(number_errors["orga_context_added"])+" unique organanizational context added")
     error_messages.append(str(number_errors["orga_context_removed"])+" unique organanizational context removed")
     error_messages.append(str(number_errors["new_thirdParty_organ"])+" users have a new thirdparty organization")
     error_messages.append(str(number_errors["removed_thirdParty_orga"])+" users have a thirdparty organization removed")
@@ -287,85 +320,120 @@ def createFilesResults(path_to_past_results,error_messages,number_errors,dictMap
     printAndSaveReportErrorMessages(path_to_past_results,error_messages)
     createFilesResultsByErrorTypes(path_to_past_results,number_errors,dictMapErrors)
 
+def sortDictionnaryForJson(dictMapErrors):
+    for error in dictMapErrors:
+        if error=="dict_context_missing" or error=="dict_context_roles_users" or error=="orga_context_added" or error=="orga_context_removed":
+            if error=="dict_context_missing":
+                    key_order = ('context', 'total_users', 'user')
+                    itemToSort='total_users'
+            elif error=="dict_context_roles_users":
+                key_order=("context","total_change_for_context","differences")
+                itemToSort='total_change_for_context'
+            elif error=="orga_context_added" or error=="orga_context_removed":
+                key_order=("context","nb users","users")
+                itemToSort='nb users'
+            current_error=dictMapErrors[error]
+            list_error=[]
+            for dictionnary in current_error:
+                current_error[dictionnary]["context"]=dictionnary
+                
+                new_queue = OrderedDict()
+                
+                for k in key_order:
+                    new_queue[k] = current_error[dictionnary][k]
+                current_error[dictionnary]=new_queue
+                list_error.append(current_error[dictionnary])
+     
+            list_error=sorted(list_error, key=itemgetter(itemToSort),reverse=True)
+            dictMapErrors[error]=list_error
+
+        
+
+    return dictMapErrors
+
 def createFilesResultsByErrorTypes(path_to_past_results,number_errors,dictMapErrors):
+    dictMapErrors=sortDictionnaryForJson(dictMapErrors)
     dict_context_missing=dictMapErrors["dict_context_missing"]
     missing_users=dictMapErrors["missing_users"]
     length_name_bigger_fifty=dictMapErrors["length_name_bigger_fifty"]
     other_errors=dictMapErrors["other_errors"]
     new_users=dictMapErrors["new_users"]
     removed_users=dictMapErrors["removed_users"]
-    organ_context_added=dictMapErrors["organ_context_added"]
-    organ_context_removed=dictMapErrors["orga_context_removed"]
+    orga_context_added=dictMapErrors["orga_context_added"]
+    orga_context_removed=dictMapErrors["orga_context_removed"]
     new_thirdParty_organ=dictMapErrors["new_thirdParty_organ"]
     removed_thirdParty_orga=dictMapErrors["removed_thirdParty_orga"]
     user_data_changed=dictMapErrors["user_data_changed"]
     roles_differents=dictMapErrors["roles_differents"]
     dict_context_roles_users=dictMapErrors["dict_context_roles_users"]
 
+    
+
+
     with open(path_to_past_results+'contexts_with_roles_changed_and_number_users.json','w') as f:
         f.write("%s" % str(number_errors["dict_context_roles_users"])+" errors. \nList of context with diff of roles and users\n\n")
-        json.dump(dict_context_roles_users, f,indent=2, separators=(',', ': '),ensure_ascii=True)
+        json.dump(dict_context_roles_users, f,indent=4, separators=(',', ': '),ensure_ascii=True)
 
 
-    with open(path_to_past_results+'context_missing_with_users.txt','w') as f:
-        f.write("%s" % str(number_errors["failures_missing_context"])+" errors. \nList of context with users attached with error message : User not migrated correctly. Check the errors: Amount of errors: 1\n1 Context XXXX not exists\n\n")
-        json.dump(dict_context_missing, f,indent=2, separators=(',', ': '),ensure_ascii=True)
+    with open(path_to_past_results+'context_missing_with_users.json','w') as f:
+        f.write("%s" % str(number_errors["unique_failures_missing_context"])+" errors. \nList of context with users attached with error message : User not migrated correctly. Check the errors: Amount of errors: 1\n1 Context XXXX not exists\n\n")
+        json.dump(dict_context_missing, f,indent=4, separators=(',', ': '),ensure_ascii=True)
 
     with open(path_to_past_results+'unique_context_missing.txt','w') as f:
         f.write("%s" % str(number_errors["unique_failures_missing_context"]) +" errors. \nList of unique context with error message : User not migrated correctly. Check the errors: Amount of errors: 1\n1 Context XXXX not exists\n\n")
-        for item in dict_context_missing.keys():
-            f.write("%s\n" % item)
+        for item in dict_context_missing:
+            f.write("%s\n" % item["context"])
 
     with open(path_to_past_results+'user_missing.txt','w') as f:
-        f.write("%s" % str(number_errors["missing_users_errors"])+" errors. \nList of id with error message : User does not exist")
+        f.write("%s" % str(number_errors["missing_users_errors"])+" errors. \nList of id with error message : User does not exist\n")
         for item in missing_users:
             f.write("%s\n" % item)
 
     with open(path_to_past_results+'length_element_bigger.txt','w') as f:
-        f.write("%s" % str(number_errors["length_bigger_errors"])+" errors. \nList of id with error message : 'Schema validation error\n[Error] Element length must be lower or equal to 50!'")
+        f.write("%s" % str(number_errors["length_bigger_errors"])+" errors. \nList of id with error message : 'Schema validation error\n[Error] Element length must be lower or equal to 50!'\n")
         for item in length_name_bigger_fifty:
             f.write("%s\n" % item)
 
     with open(path_to_past_results+'others_errors.json', 'w') as fp:
-        fp.write("%s" % str(number_errors["other_errors"])+" errors. \nList of all others errors")
-        json.dump(other_errors, fp,indent=2, separators=(',', ': '),ensure_ascii=True)
+        fp.write("%s" % str(number_errors["other_errors"])+" errors. \nList of all others errors\n")
+        json.dump(other_errors, fp,indent=4, separators=(',', ': '),ensure_ascii=True)
 
     with open(path_to_past_results+'new_users.txt','w') as f:
-        f.write("%s" % str(number_errors["new_users"])+" errors. \nList of id with error message : 'New users'")
+        f.write("%s" % str(number_errors["new_users"])+" errors. \nList of id with error message : 'New users'\n")
         for item in new_users:
             f.write("%s\n" % item)
     
     with open(path_to_past_results+'removed_users.txt','w') as f:
-        f.write("%s" % str(number_errors["removed_users"])+" errors. \nList of id with error message : removed users'")
+        f.write("%s" % str(number_errors["removed_users"])+" errors. \nList of id with error message : removed users'\n")
         for item in removed_users:
             f.write("%s\n" % item)
 
-    with open(path_to_past_results+'organ_context_added.json','w') as f:
-        f.write("%s" % str(number_errors["organ_context_added"])+" errors. \nList all id with error message : organization context added")
-        json.dump(organ_context_added, f,indent=2, separators=(',', ': '),ensure_ascii=True)
+    with open(path_to_past_results+'orga_context_added.json','w') as f:
+        f.write("%s" % str(number_errors["orga_context_added"])+" errors. \nList all id with error message : organization context added\n")
+        json.dump(orga_context_added, f,indent=4, separators=(',', ': '),ensure_ascii=True)
 
-    with open(path_to_past_results+'organ_context_removed.json','w') as f:
-        f.write("%s" % str(number_errors["organ_context_added"])+" errors. \nList all id with error message : organization context added")
-        json.dump(organ_context_removed, f,indent=2, separators=(',', ': '),ensure_ascii=True)
+    with open(path_to_past_results+'orga_context_removed.json','w') as f:
+        f.write("%s" % str(number_errors["orga_context_removed"])+" errors. \nList all id with error message : organization context removed\n")
+        json.dump(orga_context_removed, f,indent=4, separators=(',', ': '),ensure_ascii=True)
 
     with open(path_to_past_results+'new_thirdParty_organ.txt','w') as f:
-        f.write("%s" % str(number_errors["new_thirdParty_organ"])+" errors. \nList of id with error message : New ThirdParty Organization")
+        f.write("%s" % str(number_errors["new_thirdParty_organ"])+" errors. \nList of id with error message : New ThirdParty Organization\n")
         for item in new_thirdParty_organ:
             f.write("%s\n" % item)
 
     with open(path_to_past_results+'removed_thirdParty_orga.txt','w') as f:
-        f.write("%s" % str(number_errors["removed_thirdParty_orga"])+" errors. \nList of id with error message : removed_thirdParty_orga")
+        f.write("%s" % str(number_errors["removed_thirdParty_orga"])+" errors. \nList of id with error message : removed_thirdParty_orga\n")
         for item in removed_thirdParty_orga:
             f.write("%s\n" % item)
 
     with open(path_to_past_results+'user_data_changed.txt','w') as f:
-        f.write("%s" % str(number_errors["user_data_changed"])+" errors. \nList of id with error message : user_data_changed")
-        for item in length_name_bigger_fifty:
+        f.write("%s" % str(number_errors["user_data_changed"])+" errors. \nList of id with error message : user_data_changed\n")
+        for item in user_data_changed:
             f.write("%s\n" % item)
 
     with open(path_to_past_results+'roles_differents.txt','w') as f:
-        f.write("%s" % str(number_errors["roles_differents"])+" errors. \nList of id with error message : roles_differents")
-        for item in user_data_changed:
+        f.write("%s" % str(number_errors["roles_differents"])+" errors. \nList of id with error message : roles_differents\n")
+        for item in roles_differents:
             f.write("%s\n" % item)
 
 
@@ -383,7 +451,7 @@ def ProcessCheckResults(path_allure_results):
     dictMapErrors["other_errors"]={}
     dictMapErrors["new_users"]=[]
     dictMapErrors["removed_users"]=[]
-    dictMapErrors["organ_context_added"]={}
+    dictMapErrors["orga_context_added"]={}
     dictMapErrors["orga_context_removed"]={}
     dictMapErrors["new_thirdParty_organ"]=[]
     dictMapErrors["removed_thirdParty_orga"]=[]
