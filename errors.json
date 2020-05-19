@@ -2,62 +2,101 @@
     {
         "full_name":"User does not exist",
         "type":"User does not exist",
+        "expression_to_look":"User does not exist",
         "identify":"users",
-        "type_exit_file":"txt",
-        "message_exit_file":"users doesn't exist",
+        "type_exit_file":".txt",
+        "message_exit_file":" users doesn't exist",
         "head_file":"List of users id with error message : User does not exist"
     },
     {
-        "full_name":"Schema validation error\n[Error] Element length must be lower or equal to 50!",
+        "full_name":"Element length must be lower or equal to 50",
         "type":"Schema validation error\n[Error] Element length must be lower or equal to 50!",
+        "expression_to_look":"Schema validation error\n[Error] Element length must be lower or equal to 50!",
         "identify":"users",
-        "type_exit_file":"txt",
-        "message_exit_file":"users with element length>50",
+        "type_exit_file":".txt",
+        "message_exit_file":" users with element length>50",
         "head_file":"List of users id with error message : Schema validation error\n[Error] Element length must be lower or equal to 50!"
     },
     {
-        "full_name":"[NEW USER]",
+        "full_name":"New users",
         "type":"[NEW USER]",
+        "expression_to_look":"[NEW USER]",
         "identify":"users",
-        "type_exit_file":"txt",
-        "message_exit_file":"new users",
+        "type_exit_file":".txt",
+        "message_exit_file":" new users",
         "head_file":"List of users id with error message : [NEW USER]"
     },
     {
-        "full_name":"[REMOVED USER]",
+        "full_name":"User removed",
         "type":"[REMOVED USER]",
+        "expression_to_look":"[REMOVED USER]",
         "identify":"users",
-        "type_exit_file":"txt",
-        "message_exit_file":"removed users",
+        "type_exit_file":".txt",
+        "message_exit_file":" removed users",
         "head_file":"List of users id with error message : [REMOVED USER]"
     },
     {
-        "full_name":"[NEW ORGANIZATION]",
+        "full_name":"New ThirdParty organization",
         "type":"[NEW ORGANIZATION]",
+        "expression_to_look":"[NEW ORGANIZATION]",
         "identify":"users",
-        "type_exit_file":"txt",
-        "message_exit_file":"users have a new thirdparty organization",
+        "type_exit_file":".txt",
+        "message_exit_file":" users have a new thirdparty organization",
         "head_file":"List of users id with error message : New ThirdParty Organization"
     },
     {
-        "full_name":"[REMOVED ORGANIZATION]",
+        "full_name":"ThirdParty organization removed",
         "type":"[REMOVED ORGANIZATION]",
+        "expression_to_look":"[REMOVED ORGANIZATION]",
         "identify":"users",
-        "type_exit_file":"txt",
-        "message_exit_file":"users have a removed thirdparty organization",
+        "type_exit_file":".txt",
+        "message_exit_file":" users have a removed thirdparty organization",
         "head_file":"List of users id with error message : Removed ThirdParty Organization"
     },
     {
-        "full_name":"[REMOVED ORGANIZATION]",
-        "type":"[REMOVED ORGANIZATION]",
-        "identify":"users",
-        "type_exit_file":"txt",
-        "message_exit_file":"users have a removed thirdparty organization",
-        "head_file":"List of users id with error message : Removed ThirdParty Organization"
+        "full_name":"Organizational Context added",
+        "type":"[USER DIFFERENCES]",
+        "expression_to_look":"Organizational Context added",
+        "identify":"contexts",
+        "type_exit_file":".json",
+        "message_exit_file":" unique organanizational contexts added",
+        "head_file": "errors. \nList all id with error message : organization context added\n"
     },
-    
-
-
-
+    {
+        "full_name":"Organizational Context removed",
+        "type":"[USER DIFFERENCES]",
+        "expression_to_look":"Organizational Context removed",
+        "identify":"contexts",
+        "type_exit_file":".json",
+        "message_exit_file":" unique organanizational context removed",
+        "head_file":" errors. \nList all id with error message : organization context removed\n"
+    },
+    {
+        "full_name":"User data changed",
+        "type":"[USER DIFFERENCES]",
+        "expression_to_look":"Communication Channel/First Name is incorrect/Last Name is incorrect",
+        "identify":"users",
+        "type_exit_file":".txt",
+        "message_exit_file":" users have seen their data changed",
+        "head_file":" errors. \nList of users id with error message : Communication Channel/First Name is incorrect/Last Name is incorrect\n"
+    },
+    {
+        "full_name":"Roles are different",
+        "type":"[USER DIFFERENCES]",
+        "expression_to_look":"Roles are different",
+        "identify":"contexts",
+        "type_exit_file":".json",
+        "message_exit_file":"  unique contexts roles changed for %s users",
+        "head_file":"  errors. \nList of contexts with diff of roles and users\n\n"
+    },
+    {
+        "full_name":"Contexts are missing",
+        "type":"User not migrated correctly",
+        "expression_to_look":"Context-not exists",
+        "identify":"contexts",
+        "type_exit_file":".json",
+        "message_exit_file":" unique contexts missing",
+        "head_file":" errors. \nList of context with users attached with error message : User not migrated correctly. Check the errors: Amount of errors: 1\n1 Context XXXX not exists\n\n"
+    }
 
 ]
