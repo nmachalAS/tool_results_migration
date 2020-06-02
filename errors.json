@@ -10,8 +10,8 @@
     },
     {
         "full_name":"Element length must be lower or equal to 50",
-        "type":"Schema validation error\n[Error] Element length must be lower or equal to 50!",
-        "expression_to_look":"Schema validation error\n[Error] Element length must be lower or equal to 50!",
+        "type":"[API ISSUE] Schema validation error\n[Error] Element length must be lower or equal to 50!",
+        "expression_to_look":"[API ISSUE] Schema validation error\n[Error] Element length must be lower or equal to 50!",
         "identify":"users",
         "type_exit_file":".txt",
         "message_exit_file":" users with element length>50",
@@ -73,7 +73,7 @@
     },
     {
         "full_name":"User data changed",
-        "type":"[USER DIFFERENCES]",
+        "type":"User not migrated correctly",
         "expression_to_look":"Communication Channel/First Name is incorrect/Last Name is incorrect",
         "identify":"users",
         "type_exit_file":".txt",
@@ -92,11 +92,29 @@
     {
         "full_name":"Contexts are missing",
         "type":"User not migrated correctly",
-        "expression_to_look":"Context-not exists",
+        "expression_to_look":"Context not exists",
         "identify":"contexts",
         "type_exit_file":".json",
         "message_exit_file":" unique contexts missing",
         "head_file":" errors. \nList of context with users attached with error message : User not migrated correctly. Check the errors: Amount of errors: 1\n1 Context XXXX not exists\n\n"
+    },
+    {
+        "full_name":"Context not found after migration",
+        "type":"User not migrated correctly",
+        "expression_to_look":"Context not found after migration",
+        "identify":"contexts",
+        "type_exit_file":".json",
+        "message_exit_file":" context has not been found after migration",
+        "head_file":" errors. \nList of context with users attached with error message : User not migrated correctly. Context XXXX not found after migration\n\n"
+    },
+    {
+        "full_name":"User found not by expected UID",
+        "type":"User not migrated correctly",
+        "expression_to_look":"User found not by expected UID",
+        "identify":"users",
+        "type_exit_file":".txt",
+        "message_exit_file":" users have not been found by expected uid",
+        "head_file":" errors. \nList of users attached with error message : User found not by expected UID\n"
     }
 
 ]

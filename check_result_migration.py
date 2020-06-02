@@ -6,7 +6,10 @@ from operator import itemgetter
 import erreur
 import re
 
-
+countfailed=0
+countwarning=0
+countskipped=0
+countcontext=0
 """
 Check the results from immigration from allure-results.json files. 
 Take as input the repository that contains all allure-results folders.
@@ -31,7 +34,7 @@ usage: python check_results_migration.py <folder with all allure_results directo
 """
 dictMapErrors={}
 def createErrorsInstancesFromJson():
-    json_to_read="errors.json"
+    json_to_read="tool_results_migration/errors.json"
     global dictMapErrors
 
     with open(json_to_read) as file_to_read:
@@ -180,12 +183,14 @@ def getIdFromJson(data):
     elif 'ThirdPartyOrgsFileDifference_test' in name:
         id=name.split("[",1)[1].split("]",1)[0]
     elif 'UserMigration_test' in name:
-        id=data["steps"][0]["name"].split("[",1)[1].split(",",1)[0]
+        id=name.split("[",1)[1].split(" |",1)[0]
+        """
         if len(id)>10:
             try:
                 id=data["steps"][0]["name"].split("[",1)[1].split(",",1)[1][1:-1]
             except:
                 id=data["steps"][0]["name"].split("[",1)[1].split(",",1)[0][:-1]
+        """
     elif 'ThirdPartyOrg_test' in name:
         id=data["steps"][0]["name"].split(": ",1)[1]
     else:
@@ -202,7 +207,8 @@ def IsKnownUserDiffError(message):
 
 def isKnownError(message):
     listError=["User does not exist","Schema validation error\n[Error] Element length must be lower or equal to 50!",
-        "[USER DIFFERENCES]","Context","[NEW USER]","[REMOVED USER]","[NEW ORGANIZATION]","[REMOVED ORGANIZATION]"]
+        "[USER DIFFERENCES]","Context","[NEW USER]","[REMOVED USER]","[NEW ORGANIZATION]","[REMOVED ORGANIZATION]",
+        "User not migrated correctly"]
     for error in listError:
         if error in message:
             return True
@@ -212,11 +218,19 @@ def isKnownError(message):
 
 def treatUserNotMigratedCorrectly(message,total_of_failures_missing_context,other_errors,user_id):
     global dictMapErrors
+    global countcontext
     dict_context_missing=dictMapErrors["Contexts_are_missing"].object
+    dict_context_not_found_after_migration=dictMapErrors["Context_not_found_after_migration"].object
+    list_users_not_found_w_uid=dictMapErrors["User_found_not_by_expected_UID"].object
     if "Context" in message and "not exists" in message:
         list_contexts=message.split("Context")[1:]
         for context in list_contexts:
-            context = context.split("'")[1]
+            try:
+                context = context.split("'")[1]
+            except:
+                context = context.split("not exists: ")[1].split("\n",1)[0]
+            if context=="DEU189V":
+                countcontext+=1
             if context not in dict_context_missing.keys():
                 dict_context_missing[context]=OrderedDict()
                 dict_context_missing[context]["total_users"]=0
@@ -224,9 +238,29 @@ def treatUserNotMigratedCorrectly(message,total_of_failures_missing_context,othe
             dict_context_missing[context]["user"].append(user_id)
             dict_context_missing[context]["total_users"]+=1
             total_of_failures_missing_context+=1
+    if "context not found after migration":
+        list_contexts=message.split("Context not found after migration ")[1:]
+        for context in list_contexts:
+            try:
+                context = context.split("[")[1].split("]")[0]
+            except:
+                context = context.split("not exists: ")[1].split("\n",1)[0]
+            if context not in dict_context_not_found_after_migration.keys():
+                dict_context_not_found_after_migration[context]=OrderedDict()
+                dict_context_not_found_after_migration[context]["total_users"]=0
+                dict_context_not_found_after_migration[context]["user"]=[]
+            dict_context_not_found_after_migration[context]["user"].append(user_id)
+            dict_context_not_found_after_migration[context]["total_users"]+=1
+            total_of_failures_missing_context+=1
+    if "Communication Channel" in message or "First Name" in message or "Last Name" in message:
+        other_errors=treatUserDifferences(message,user_id,other_errors)
+    if "User found not by expected UID" in message:
+        list_users_not_found_w_uid.append(user_id)
     else:
         other_errors[user_id]=message
     dictMapErrors["Contexts_are_missing"].setObject(dict_context_missing)
+    dictMapErrors["Context_not_found_after_migration"].setObject(dict_context_not_found_after_migration)
+    dictMapErrors["User_found_not_by_expected_UID"].setObject(list_users_not_found_w_uid)
     return total_of_failures_missing_context,other_errors
 
 def treatUserDifferences(message,user_id,other_errors):
@@ -244,8 +278,12 @@ def treatUserDifferences(message,user_id,other_errors):
     return other_errors
 
 
-def treat_json_file_results(json_file,total_of_failures_missing_context,countfailed,list_test_users):
+def treat_json_file_results(json_file,total_of_failures_missing_context,list_test_users):
     global dictMapErrors
+    global countfailed
+    global countwarning
+    global countskipped
+    global countcontext
     other_errors={}
     with open(json_file) as file_to_read:
         data = json.load(file_to_read)
@@ -261,18 +299,34 @@ def treat_json_file_results(json_file,total_of_failures_missing_context,countfai
                         dictMapErrors[list_test_users[test]].object.append(user_id)
                 if "[USER DIFFERENCES]" in message:
                     other_errors=treatUserDifferences(message,user_id,other_errors)
-                if "User not migrated correctly" in message:
+                if "User not migrated correctly" in message:          
                     total_of_failures_missing_context,other_errors=treatUserNotMigratedCorrectly(message,total_of_failures_missing_context,other_errors,user_id)
+                    
             else:
                 other_errors[user_id]=message
+        
+        elif "status" in data.keys() and data["status"]=="broken":
+            countwarning+=1
+            user_id=getIdFromJson(data)
+            message=data["statusDetails"]["message"]
+            if "User not migrated correctly" in message:          
+                total_of_failures_missing_context,other_errors=treatUserNotMigratedCorrectly(message,total_of_failures_missing_context,other_errors,user_id)
+        elif "status" in data.keys() and data["status"]=="skipped":
+            user_id=getIdFromJson(data)
+            message=data["statusDetails"]["message"]
+            countskipped+=1
+            for test in list_test_users:
+                if test==message:
+                    dictMapErrors[list_test_users[test]].object.append(user_id)
 
 
+    return total_of_failures_missing_context,other_errors
 
-
-    return total_of_failures_missing_context,countfailed,other_errors
-
-def countandCreateErrorsMessages(total_of_failures_missing_context,countfailed,other_errors):
+def countandCreateErrorsMessages(total_of_failures_missing_context,other_errors):
     global dictMapErrors
+    global countfailed
+    global countwarning
+    global countskipped
     number_errors=OrderedDict()
    
 
@@ -283,9 +337,13 @@ def countandCreateErrorsMessages(total_of_failures_missing_context,countfailed,o
     number_errors["other_errors"]=len(other_errors)
     number_errors["failures_missing_context"]=total_of_failures_missing_context
     number_errors["total_users_errors"]=countfailed
+    number_errors["total_users_warning"]=countwarning
+    number_errors["total_users_skipped"]=countskipped
 
     error_messages=[]
     error_messages.append(str(number_errors["total_users_errors"])+" users have at least 1 error")
+    error_messages.append(str(number_errors["total_users_warning"])+" users have at least 1 warning")
+    error_messages.append(str(number_errors["total_users_skipped"])+" users have at least 1 skipped error")
     error_messages.append(str(number_errors["failures_missing_context"])+" errors with missing contexts")
     error_messages.append(str(number_errors["other_errors"])+" other errors")
     return number_errors,error_messages
@@ -332,17 +390,17 @@ def ProcessCheckResults(path_allure_results):
     path_to_past_results=createFolderForCheckingResults()
     
     total_of_failures_missing_context=0
-    countfailed=0
+    
     for allure_results_folder in list_allure_results_folders:
 
         list_json_files = [allure_results_folder+ f for f in os.listdir(allure_results_folder) if ".json" in f]
 
         for json_file in list_json_files:
 
-            total_of_failures_missing_context,countfailed,other_errors=treat_json_file_results(json_file,total_of_failures_missing_context,countfailed,list_test_users)
+            total_of_failures_missing_context,other_errors=treat_json_file_results(json_file,total_of_failures_missing_context,list_test_users)
 
     
-    number_errors,error_messages=countandCreateErrorsMessages(total_of_failures_missing_context,countfailed,other_errors)
+    number_errors,error_messages=countandCreateErrorsMessages(total_of_failures_missing_context,other_errors)
 
 
 
@@ -354,5 +412,6 @@ if len(sys.argv) < 2:
     sys.exit(1)
 
 path_allure_results=sys.argv[1]"""
-path_allure_results="Migration/Results2"
+path_allure_results="/Users/nael/Work/Migration/results/"
 ProcessCheckResults(path_allure_results)
+print("nb occurence contexte="+str(countcontext))

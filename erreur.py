@@ -23,7 +23,7 @@ class Erreur:
         self.name_exit_file=data_json["full_name"]+data_json["type_exit_file"]
         self.nb_affected = 0
         self.exit_message=data_json["message_exit_file"]
-        self.head_file=data_json["message_exit_file"]
+        self.head_file=data_json["head_file"]
         self.object=self.findTypeObect()
         self.path_to_past_results="Results_Job/"
     
@@ -43,8 +43,10 @@ class Erreur:
         self.exit_message=str(self.nb_affected)+self.exit_message
 
     def sortObject(self):
-        if self.name=="Contexts are missing" or self.name=="Roles are different" or self.name=="Organizational Context added" or self.name=="Organizational Context removed":
-            if self.name=="Contexts are missing":
+        if (self.name=="Contexts are missing" or self.name=="Roles are different" 
+            or self.name=="Organizational Context added" or self.name=="Organizational Context removed" 
+            or self.name=="Context not found after migration"):
+            if self.name=="Contexts are missing" or self.name=="Context not found after migration":
                     key_order = ('context', 'total_users', 'user')
                     itemToSort='total_users'
             elif self.name=="Roles are different":
@@ -66,18 +68,22 @@ class Erreur:
      
             list_error=sorted(list_error, key=itemgetter(itemToSort),reverse=True)
             if self.name=="Roles are different":
-                list_error.insert(0,current_error["total_added_admin_roles"])
-                list_error.insert(0,current_error["total_removed_admin_roles"])
-                list_error.insert(0,current_error["total_duplicated_admin_roles"])
+                try:
+                    list_error.insert(0,current_error["total_added_admin_roles"])
+                    list_error.insert(0,current_error["total_removed_admin_roles"])
+                    list_error.insert(0,current_error["total_duplicated_admin_roles"])
+                except:
+                    print("no admin roles")
 
             self.object=list_error
     
     def createFilesResults(self):
         with open(self.path_to_past_results+self.name_exit_file,'w') as f:
-            f.write("%s" % self.exit_message)
+            f.write("%s" % str(self.nb_affected)+self.head_file)
             if self.type_file==".json":
                 json.dump(self.object, f,indent=4, separators=(',', ': '),ensure_ascii=True)
             else:
-                for item in self.object:
-                    f.write("%s\n" % item)
+                json_object={}
+                json_object["list"]=self.object
+                json.dump(json_object, f,indent=2, separators=(',', ': '),ensure_ascii=True)
         
