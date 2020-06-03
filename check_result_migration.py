@@ -10,6 +10,7 @@ countfailed=0
 countwarning=0
 countskipped=0
 countcontext=0
+list_successfull_users=[]
 """
 Check the results from immigration from allure-results.json files. 
 Take as input the repository that contains all allure-results folders.
@@ -34,7 +35,7 @@ usage: python check_results_migration.py <folder with all allure_results directo
 """
 dictMapErrors={}
 def createErrorsInstancesFromJson():
-    json_to_read="tool_results_migration/errors.json"
+    json_to_read="errors.json"
     global dictMapErrors
 
     with open(json_to_read) as file_to_read:
@@ -284,6 +285,7 @@ def treat_json_file_results(json_file,total_of_failures_missing_context,list_tes
     global countwarning
     global countskipped
     global countcontext
+    global list_successfull_users
     other_errors={}
     with open(json_file) as file_to_read:
         data = json.load(file_to_read)
@@ -319,6 +321,10 @@ def treat_json_file_results(json_file,total_of_failures_missing_context,list_tes
                 if test==message:
                     dictMapErrors[list_test_users[test]].object.append(user_id)
 
+        elif "UserMigration_test" in data["name"] and data["status"]=="passed":
+
+            user_id=getIdFromJson(data)
+            list_successfull_users.append(user_id)
 
     return total_of_failures_missing_context,other_errors
 
@@ -350,6 +356,7 @@ def countandCreateErrorsMessages(total_of_failures_missing_context,other_errors)
 
 def printAndSaveReportErrorMessages(path_to_past_results,error_messages):
     global dictMapErrors
+    global list_successfull_users
     with open(path_to_past_results+'global report of errors','w') as f:
         for error in dictMapErrors:
             f.write("%s\n" % dictMapErrors[error].exit_message)
@@ -357,6 +364,8 @@ def printAndSaveReportErrorMessages(path_to_past_results,error_messages):
         for error in error_messages:
             f.write("%s\n" % error)
             print(error)
+        f.write(str(len(list_successfull_users))+"users successfully migrated")
+        print(str(len(list_successfull_users))+"users successfully migrated")
     print("Check Results_Job folders to see results in details")
 
 def createFilesResults(path_to_past_results,error_messages,number_errors,other_errors):
@@ -371,6 +380,7 @@ def sortDictionnaryForJson():
 
 def createFilesResultsByErrorTypes(path_to_past_results,number_errors,other_errors):
     global dictMapErrors
+    global list_successfull_users
 
     sortDictionnaryForJson()
     for error in dictMapErrors:
@@ -381,6 +391,10 @@ def createFilesResultsByErrorTypes(path_to_past_results,number_errors,other_erro
         fp.write("%s" % str(number_errors["other_errors"])+" errors. \nList of all others errors\n")
         json.dump(other_errors, fp,indent=4, separators=(',', ': '),ensure_ascii=True)
 
+    with open(path_to_past_results+'successfull_users.txt', 'w') as fp:
+        for user in list_successfull_users:
+            fp.write("%s\n" % user )
+        
 
 
 def ProcessCheckResults(path_allure_results):
@@ -390,7 +404,6 @@ def ProcessCheckResults(path_allure_results):
     path_to_past_results=createFolderForCheckingResults()
     
     total_of_failures_missing_context=0
-    
     for allure_results_folder in list_allure_results_folders:
 
         list_json_files = [allure_results_folder+ f for f in os.listdir(allure_results_folder) if ".json" in f]
@@ -406,12 +419,13 @@ def ProcessCheckResults(path_allure_results):
 
     createFilesResults(path_to_past_results,error_messages,number_errors,other_errors)
 
-"""
+
 if len(sys.argv) < 2:
     print("Check results errors from migration with json files in allure-results folders.\nusage: python check_results_migration.py <folder with all allure_results directory>")
-    sys.exit(1)
+    
 
-path_allure_results=sys.argv[1]"""
-path_allure_results="/Users/nael/Work/Migration/results/"
+path_allure_results=sys.argv[1]
+
+#path_allure_results="/Users/nael/Work/Migration/results/"
 ProcessCheckResults(path_allure_results)
 print("nb occurence contexte="+str(countcontext))
